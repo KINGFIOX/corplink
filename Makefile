@@ -18,15 +18,3 @@ push:
 	docker push $(REPO):latest
 	docker push $(REPO):$(TAG)
 
-run:
-	docker run -d \
-		--name=corplink \
-		--hostname=ubuntu \
-		--device=/dev/net/tun \
-		--cap-add=NET_ADMIN \
-		--shm-size=512m \
-		-p 6901:6901 \
-		-p 8888:8118 \
-		-p 1088:1080 \
-		-e VNC_PW=password \
-		$(REPO):$(TAG)

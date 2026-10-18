@@ -1,0 +1,60 @@
+# docker 飞连(基于 sleepymole/docker-corplink,官方飞连客户端 + Kasm 网页桌面)
+#
+#   网页桌面(登录飞连用): https://127.0.0.1:6901  用户 kasm_user,密码由 VNC_PW 控制(默认 password)
+#   HTTP  代理: 127.0.0.1:8888  (容器内 privoxy:8118)
+#   SOCKS5 代理: 127.0.0.1:1088  (容器内 socks5:1080)
+#
+# 说明:
+# - 代理均为无认证,端口只绑 127.0.0.1,勿改成 0.0.0.0,否则会向局域网开放匿名代理。
+# - devices/cap_add 仅作用于容器自身的 network namespace(飞连建 WireGuard 隧道
+#   必须在容器内创建 tun 网卡),不影响宿主机路由和防火墙;宿主机视角只有上面 3 个映射端口。
+# - 登录状态持久化在 named volume corplink-home(/home/kasm-user),重建容器不丢登录。
+
+services:
+  corplink:
+    image: sleepymole/corplink:latest
+    container_name: corplink
+    hostname: ubuntu
+    restart: unless-stopped
+    # 宿主机 resolv.conf 指向 Tailscale 100.100.100.100,容器转发不可达,
+    # 显式指定公网国内 DNS(登录飞连、连 VPN 服务器都靠它解析)
+    dns:
+      - 223.5.5.5
+      - 119.29.29.29
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    shm_size: 512m
+    # 飞连 VPN 启用后会阻断路径上含 RFC1918 地址的新建入站/出站连接(eBPF 级,
+    # netfilter 不可见)。解法:整个网络用 192.0.2.0/30(TEST-NET-1,非 RFC1918),
+    # docker-proxy 转发路径(源 192.0.2.1 -> 目的 192.0.2.2)上无任何私网地址,
+    # 实测 VPN 下端口映射可正常工作。
+    # 不能选 100.64.0.0/10:一是宿主机 Tailscale ts-input 防伪造会丢弃该段源的
+    # 包;二是 CGNAT 段疑似也在飞连的黑名单内。
+    extra_hosts:
+      - "host.docker.internal:192.0.2.1"
+    ports:
+      - "192.168.122.1:8118:8118"
+      - "192.168.122.1:1080:1080"
+    environment:
+      VNC_PW: ${VNC_PW:-password}
+    volumes:
+      - corplink-home:/home/kasm-user
+      # 覆盖镜像内置启动脚本:去掉 `iptables -t nat -F`(SNAT 模式专用),
+      # 它会误清新版 Docker 内嵌 DNS 依赖的容器内 DNAT 规则,导致容器内 DNS 解析全部失败
+      - ./custom_startup.sh:/dockerstartup/custom_startup.sh:ro
+
+volumes:
+  corplink-home:
+    # 显式固定 volume 名,不随 compose 项目名/目录名变化
+    name: corplink-home
+
+networks:
+  default:
+    ipam:
+      # TEST-NET-1 文档保留段,全球不可路由,无人使用;非 RFC1918,
+      # 不在飞连私网黑名单,也不与 Tailscale 的 100.64.0.0/10 防伪造段冲突。
+      # /30 只容纳一个容器(网关 .1 + 容器 .2)
+      config:
+        - subnet: 192.0.2.0/30
