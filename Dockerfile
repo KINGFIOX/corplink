@@ -1,35 +1,26 @@
-ARG BASE_TAG="develop"
-ARG BASE_IMAGE="core-ubuntu-noble"
-FROM kasmweb/$BASE_IMAGE:$BASE_TAG
+# 原镜像基于 kasmweb/core-ubuntu-noble(KasmVNC 网页桌面),不稳定且自带
+# iptables/SNAT 启动逻辑会破坏容器内嵌 DNS。改为 ubuntu:noble + TigerVNC +
+# openbox,纯原生 VNC(5901),supervisor 托管全部进程。
+# 国内网络直连 Docker Hub 不通时,可用 --build-arg BASE_IMAGE 指定镜像源,如:
+#   docker build --build-arg BASE_IMAGE=docker.1panel.live/library/ubuntu:noble .
+ARG BASE_IMAGE="ubuntu:noble"
+FROM ${BASE_IMAGE}
 
 USER root
 
-ENV HOME=/home/kasm-default-profile
-ENV STARTUPDIR=/dockerstartup
-WORKDIR $HOME
-
-######### Customize Container Here ###########
+ENV HOME=/home/corplink \
+    LANG=zh_CN.UTF-8 \
+    LC_ALL=zh_CN.UTF-8 \
+    TZ=Asia/Shanghai \
+    VNC_GEOMETRY=1440x900
 
 # Install socks5
 COPY --from=serjs/go-socks5-proxy /socks5 /usr/local/bin/socks5
 
-# Install Corplink
-COPY ./src/ubuntu/install/corplink $INST_SCRIPTS/corplink/
-RUN bash $INST_SCRIPTS/corplink/install_corplink.sh  && rm -rf $INST_SCRIPTS/corplink/
+# Install Corplink client + VNC desktop + proxy services
+COPY ./src/ubuntu/install/corplink /corplink-build
+RUN bash /corplink-build/install_corplink.sh && rm -rf /corplink-build
 
-COPY ./src/ubuntu/install/corplink/custom_startup.sh $STARTUPDIR/custom_startup.sh
-RUN chmod +x $STARTUPDIR/custom_startup.sh
-RUN chmod 755 $STARTUPDIR/custom_startup.sh
+EXPOSE 5901 8118 1080
 
-######### End Customizations #########
-RUN chown 1000:0 $HOME
-RUN $STARTUPDIR/set_user_permission.sh $HOME
-
-ENV HOME=/home/kasm-user
-WORKDIR $HOME
-RUN mkdir -p $HOME && chown -R 1000:0 $HOME
-
-RUN echo "kasm-user ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/kasm-user
-RUN chmod 0440 /etc/sudoers.d/kasm-user
-
-USER 1000
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

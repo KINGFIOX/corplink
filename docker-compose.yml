@@ -1,14 +1,16 @@
-# docker 飞连(基于 sleepymole/docker-corplink,官方飞连客户端 + Kasm 网页桌面)
+# docker 飞连(官方飞连客户端 + TigerVNC 桌面,已去掉 Kasm)
 #
-#   网页桌面(登录飞连用): https://127.0.0.1:6901  用户 kasm_user,密码由 VNC_PW 控制(默认 password)
-#   HTTP  代理: 127.0.0.1:8888  (容器内 privoxy:8118)
-#   SOCKS5 代理: 127.0.0.1:1088  (容器内 socks5:1080)
+#   VNC 桌面(登录飞连用): vnc://127.0.0.1:5901  密码由 VNC_PW 控制(默认 password)
+#   HTTP  代理: 192.168.122.1:8118  (容器内 privoxy:8118)
+#   SOCKS5 代理: 192.168.122.1:1080  (容器内 socks5:1080)
 #
 # 说明:
-# - 代理均为无认证,端口只绑 127.0.0.1,勿改成 0.0.0.0,否则会向局域网开放匿名代理。
+# - VNC 密码按 VNC 协议限制最多 8 位;VNC_GEOMETRY 可调桌面分辨率(默认 1440x900)。
+# - 代理均为无认证,只绑 192.168.122.1;VNC 只绑 127.0.0.1,勿改成 0.0.0.0。
 # - devices/cap_add 仅作用于容器自身的 network namespace(飞连建 WireGuard 隧道
 #   必须在容器内创建 tun 网卡),不影响宿主机路由和防火墙;宿主机视角只有上面 3 个映射端口。
-# - 登录状态持久化在 named volume corplink-home(/home/kasm-user),重建容器不丢登录。
+# - 登录状态持久化在 named volume corplink-home(/home/corplink,uid 1000,
+#   兼容旧 kasm 镜像的数据),重建容器不丢登录。
 
 services:
   corplink:
@@ -35,15 +37,14 @@ services:
     extra_hosts:
       - "host.docker.internal:192.0.2.1"
     ports:
+      - "127.0.0.1:5901:5901"
       - "192.168.122.1:8118:8118"
       - "192.168.122.1:1080:1080"
     environment:
       VNC_PW: ${VNC_PW:-password}
+      VNC_GEOMETRY: ${VNC_GEOMETRY:-1440x900}
     volumes:
-      - corplink-home:/home/kasm-user
-      # 覆盖镜像内置启动脚本:去掉 `iptables -t nat -F`(SNAT 模式专用),
-      # 它会误清新版 Docker 内嵌 DNS 依赖的容器内 DNAT 规则,导致容器内 DNS 解析全部失败
-      - ./custom_startup.sh:/dockerstartup/custom_startup.sh:ro
+      - corplink-home:/home/corplink
 
 volumes:
   corplink-home:
