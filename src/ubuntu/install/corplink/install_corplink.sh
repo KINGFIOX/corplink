@@ -2,24 +2,27 @@
 set -ex
 export DEBIAN_FRONTEND=noninteractive
 
-apt update
+apt-get update -o Acquire::Retries=3
 # tigervnc-standalone-server: Xvnc + tigervncserver 包装脚本
 # openbox/stalonetray: 轻量窗口管理器 + 托盘(飞连最小化到托盘用)
 # dbus-x11: Electron 需要 session dbus;fonts-noto-cjk: 中文渲染
-# libgtk/libnss/libasound 等: Electron 运行时依赖
+# libgtk/libnss/libasound 等: Electron 运行时依赖(trixie 的 t64 库名与 noble 一致)
+# chromium: Debian main 原生 deb(自带全部语言包,跟随 LANG 显示中文),
+# VNC 桌面里浏览 VPN 内网页用
 apt install -y --no-install-recommends \
   supervisor privoxy jq wget ca-certificates locales tzdata \
   tigervnc-standalone-server tigervnc-common tigervnc-tools \
   openbox stalonetray dbus-x11 x11-utils xterm xauth \
   fonts-noto-cjk fonts-liberation fonts-dejavu-core \
   libgtk-3-0t64 libnss3 libxss1 libasound2t64 libgbm1 libnotify4 libxtst6 \
-  libatk-bridge2.0-0t64 libxkbcommon-x11-0 libxkbfile1 libglib2.0-bin
+  libatk-bridge2.0-0t64 libxkbcommon-x11-0 libxkbfile1 libglib2.0-bin \
+  chromium
 
 sed -i 's/^# *zh_CN.UTF-8 UTF-8/zh_CN.UTF-8 UTF-8/' /etc/locale.gen
 locale-gen
 
 # 运行桌面的普通用户(uid 1000,兼容旧 volume corplink-home 里的文件属主)。
-# ubuntu:noble 自带 uid 1000 的默认用户 ubuntu,先删掉腾出 uid
+# debian 镜像无默认用户;若用 ubuntu 基础镜像构建,先删掉其 uid 1000 的 ubuntu 用户腾位
 userdel -r ubuntu 2>/dev/null || true
 groupdel ubuntu 2>/dev/null || true
 useradd -m -u 1000 -s /bin/bash corplink
@@ -29,6 +32,33 @@ sed -i '/^listen-address/d' /etc/privoxy/config
 echo 'listen-address 0.0.0.0:8118' >>/etc/privoxy/config
 
 mkdir -p /var/log/corplink /var/log/privoxy /var/log/socks5 /var/log/fixdns /var/log/xvnc
+
+# openbox 根菜单:桌面右键启动 Chromium / xterm(发行版默认菜单引用的
+# debian-menu 管道依赖未安装的 menu 包,索性整个替换)
+cat <<'EOF' >/etc/xdg/openbox/menu.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_menu xmlns="http://openbox.org/3.4/menu">
+  <menu id="root-menu" label="Openbox 3">
+    <item label="Chromium 网页浏览器">
+      <action name="Execute"><execute>chromium</execute></action>
+    </item>
+    <item label="终端 xterm">
+      <action name="Execute"><execute>xterm</execute></action>
+    </item>
+    <separator />
+    <item label="重新载入配置"><action name="Reconfigure" /></item>
+  </menu>
+</openbox_menu>
+EOF
+
+# Chromium 包装脚本:/usr/local/bin 在 PATH 里先于 /usr/bin,让菜单/xterm 里
+# 敲 chromium 都自动带上容器必需的参数(无 unprivileged user namespace,
+# SUID 沙箱不可用,与飞连 GUI 一样 --no-sandbox --disable-gpu)
+cat <<'EOF' >/usr/local/bin/chromium
+#!/bin/sh
+exec /usr/bin/chromium --no-sandbox --disable-gpu "$@"
+EOF
+chmod 755 /usr/local/bin/chromium
 
 # 飞连后台服务(建 WireGuard 隧道,root 运行)
 cat <<EOF >/etc/supervisor/conf.d/corplink-service.conf
@@ -136,9 +166,6 @@ else
 fi
 apt install -y /tmp/corplink.deb
 rm /tmp/corplink.deb
-
-# 容器入口:每次启动生成 VNC 密码文件与 xstartup,然后 exec supervisor
-install -m 755 /corplink-build/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 apt clean
 rm -rf /var/lib/apt/lists/*

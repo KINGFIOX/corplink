@@ -2,8 +2,10 @@
 
 基于 [sleepymole/docker-corplink](https://github.com/sleepymole/docker-corplink)
 改造:官方飞连 Linux 客户端(镜像内置 v3.0.24,deb 来自 cdn.isealsuite.com)跑在
-**ubuntu:noble + TigerVNC + openbox** 容器里(2026-10 从 Kasm 网页桌面迁移,
-Kasm 不稳定),VPN 隧道建立后由 privoxy/socks5 转成宿主机代理。
+**debian:trixie + TigerVNC + openbox** 容器里(2026-10 从 Kasm 网页桌面迁移,
+Kasm 不稳定;2026-11 基础镜像由 ubuntu:noble 换成 debian:trixie,因为 Ubuntu
+源里 firefox/chromium 都是 snap 过渡包、容器内装不了,Debian main 有原生
+chromium deb),VPN 隧道建立后由 privoxy/socks5 转成宿主机代理。
 所有进程(supervisor)托管:Xvnc、飞连 GUI、飞连 service、privoxy、socks5、fixdns。
 
 ## 日常使用
@@ -18,13 +20,16 @@ docker exec corplink supervisorctl status   # 各进程状态
 
 - **VNC 桌面(登录飞连)**:`vnc://127.0.0.1:5901`,密码 `VNC_PW`(默认 password;
   VNC 协议密码最多 8 位)。分辨率可用 `VNC_GEOMETRY` 调(默认 1440x900)。
+- **Chromium**:桌面空白处右键 → "Chromium 网页浏览器"启动,浏览 VPN 内网页面用
+  (容器内原生 deb,随镜像更新;已通过包装脚本自动附加 --no-sandbox --disable-gpu)。
 - **HTTP 代理**:192.168.122.1:8118(容器内 privoxy)
 - **SOCKS5 代理**:192.168.122.1:1080(容器内 go-socks5-proxy,无认证)
 - 登录状态持久化在 named volume `corplink-home`(显式命名,不随项目名/目录名变;
   挂载 /home/corplink,uid 1000 与旧 kasm 镜像一致),重建容器不丢,但重建后
   飞连一般需在桌面里手动重连一次。
-- 回滚:旧 kasm 镜像 ID `2067eb46c3ba`,`docker tag 2067eb46c3ba
-  sleepymole/corplink:latest && docker compose up -d` 即可切回。
+- 回滚:当前 ubuntu:noble 版镜像 ID `f189e8376844`(更早的 kasm 版为
+  `2067eb46c3ba`),`docker tag <ID> sleepymole/corplink:latest && docker
+  compose up -d` 即可切回。
 
 ## 核心设计:TEST-NET 网段绕过飞连的私网阻断
 
@@ -51,11 +56,14 @@ Mac 访问:`ssh -N -L 5901:127.0.0.1:5901 -L 8888:192.168.122.1:8118 -L 1088:192
 
 ## 与上游的差异(本机定制)
 
-1. **镜像从 kasmweb/core-ubuntu-noble 换成 ubuntu:noble + TigerVNC + openbox**:
+1. **镜像从 kasmweb/core-ubuntu-noble 换成 TigerVNC + openbox,再换成 debian:trixie**:
    去掉 KasmVNC 网页桌面(6901)与 kasm 启动脚本;原镜像的 `custom_startup.sh`
    里 `iptables -t nat -F` 等 SNAT 规则会误清新版 Docker 内嵌 DNS 依赖的容器内
    DNAT 规则(127.0.0.11:53→随机端口)导致 DNS 全挂,新镜像完全不做 iptables
-   操作,不再需要挂载脚本覆盖。
+   操作,不再需要挂载脚本覆盖。基础镜像选 debian:trixie 而非 ubuntu:noble:
+   Ubuntu 24.04 的 firefox/chromium 均为 snap 过渡包(容器内无 snapd 装不了),
+   trixie main 源有原生 chromium deb(自带全部语言包),且 t64 库名与 noble
+   一致,飞连 Electron 依赖原样可用。
 2. **代理端口只绑 192.168.122.1、VNC 只绑 127.0.0.1**:两个代理都无认证,绝不能
    绑 0.0.0.0。
 3. **compose 指定 dns: 223.5.5.5/119.29.29.29**:宿主机 resolv.conf 指向
@@ -63,7 +71,7 @@ Mac 访问:`ssh -N -L 5901:127.0.0.1:5901 -L 8888:192.168.122.1:8118 -L 1088:192
 4. **网络固定 192.0.2.0/30**:见上节,绕过飞连私网阻断的关键。
 5. tun/NET_ADMIN 仅作用于容器自身 netns(飞连建 WireGuard 隧道必需),
    不影响宿主机网络。
-6. 镜像本地构建(基础镜像 ubuntu:noble 经 docker.1panel.live 拉取后 retag,
+6. 镜像本地构建(基础镜像 debian:trixie 经 docker.1panel.live 拉取后 retag,
    或 `--build-arg BASE_IMAGE=...` 直指镜像源;serjs/go-socks5-proxy 同理)。
 
 ## 排障

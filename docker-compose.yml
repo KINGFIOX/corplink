@@ -3,6 +3,7 @@
 #   VNC 桌面(登录飞连用): vnc://127.0.0.1:5901  密码由 VNC_PW 控制(默认 password)
 #   HTTP  代理: 192.168.122.1:8118  (容器内 privoxy:8118)
 #   SOCKS5 代理: 192.168.122.1:1080  (容器内 socks5:1080)
+#   桌面内置 Chromium(debian:trixie 原生 deb,右键菜单启动,浏览 VPN 内网页)
 #
 # 说明:
 # - VNC 密码按 VNC 协议限制最多 8 位;VNC_GEOMETRY 可调桌面分辨率(默认 1440x900)。
