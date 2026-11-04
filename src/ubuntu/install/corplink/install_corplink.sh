@@ -2,6 +2,13 @@
 set -ex
 export DEBIAN_FRONTEND=noninteractive
 
+# 国内直连 deb.debian.org 很慢,换成清华 TUNA 镜像(deb822 .sources 与传统
+# .list 两种格式都替换;若用 ubuntu 基础镜像构建则此替换不命中,保持原样)
+sed -i \
+  -e 's|deb.debian.org/debian|mirrors.tuna.tsinghua.edu.cn/debian|g' \
+  -e 's|security.debian.org/debian-security|mirrors.tuna.tsinghua.edu.cn/debian-security|g' \
+  /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true
+
 apt-get update -o Acquire::Retries=3
 # tigervnc-standalone-server: Xvnc + tigervncserver 包装脚本
 # openbox/stalonetray: 轻量窗口管理器 + 托盘(飞连最小化到托盘用)
@@ -9,7 +16,7 @@ apt-get update -o Acquire::Retries=3
 # libgtk/libnss/libasound 等: Electron 运行时依赖(trixie 的 t64 库名与 noble 一致)
 # chromium: Debian main 原生 deb(自带全部语言包,跟随 LANG 显示中文),
 # VNC 桌面里浏览 VPN 内网页用
-apt install -y --no-install-recommends \
+apt-get install -y --no-install-recommends \
   supervisor privoxy jq wget ca-certificates locales tzdata \
   tigervnc-standalone-server tigervnc-common tigervnc-tools \
   openbox stalonetray dbus-x11 x11-utils xterm xauth \
@@ -164,8 +171,8 @@ if [ "$(uname -m)" = "aarch64" ] || [ "$(uname -m)" = "arm64" ]; then
 else
   wget -q -O /tmp/corplink.deb https://cdn.isealsuite.com/linux/FeiLian_Linux_amd64_v3.0.24_r5980_6ebb49.deb
 fi
-apt install -y /tmp/corplink.deb
+apt-get install -y /tmp/corplink.deb
 rm /tmp/corplink.deb
 
-apt clean
+apt-get clean
 rm -rf /var/lib/apt/lists/*

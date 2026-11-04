@@ -10,6 +10,10 @@ set -eu
 # 认 ~/.vnc。两个位置都写一份,兼容新旧基础镜像与旧 volume 里残留的 ~/.vnc。
 mkdir -p "$HOME/.vnc" "$HOME/.config/tigervnc"
 
+# 飞连 service 启动 dnsmasq(分流 DNS)时写死 /var/run/NetworkManager/dnsmasq.pid;
+# /run 是 tmpfs,每次启动都要重建该目录,否则 dnsmasq 起不来
+mkdir -p /var/run/NetworkManager
+
 # vncpasswd -f:从 stdin 读明文,输出加密密码文件(VNC 协议密码最多 8 位)
 printf '%s\n' "$VNC_PW" | vncpasswd -f >"$HOME/.vnc/passwd"
 chmod 600 "$HOME/.vnc/passwd"

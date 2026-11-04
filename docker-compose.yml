@@ -15,7 +15,7 @@
 
 services:
   corplink:
-    image: sleepymole/corplink:latest
+    image: kingfiox/corplink:latest
     container_name: corplink
     hostname: ubuntu
     restart: unless-stopped

@@ -11,8 +11,6 @@ FROM ${BASE_IMAGE}
 USER root
 
 ENV HOME=/home/corplink \
-    LANG=zh_CN.UTF-8 \
-    LC_ALL=zh_CN.UTF-8 \
     TZ=Asia/Shanghai \
     VNC_GEOMETRY=1440x900
 
@@ -23,8 +21,20 @@ COPY --from=serjs/go-socks5-proxy /socks5 /usr/local/bin/socks5
 COPY ./src/ubuntu/install/corplink /corplink-build
 RUN bash /corplink-build/install_corplink.sh && rm -rf /corplink-build
 
+# 飞连 service 靠 shell 调 `ip link/route` 配置 utun 网卡与路由;飞连 deb 的
+# 依赖链在 Ubuntu 上会带 iproute2,在 Debian 上不会 —— 缺了它 VPN 就
+# "显示已连接但 utun 无地址无路由、流量全不走隧道"。单独一层,便于缓存。
+RUN apt-get update -o Acquire::Retries=3 \
+  && apt-get install -y --no-install-recommends iproute2 \
+  && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # 容器入口单独一层,改 entrypoint 不必重跑上面的安装层
 COPY ./src/ubuntu/install/corplink/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
+# 中文 locale 放在安装层之后声明:locale-gen 在安装层里生成 zh_CN.UTF-8,
+# 若在此之前 export,构建期每个 RUN 都会报 setlocale warning
+ENV LANG=zh_CN.UTF-8 \
+    LC_ALL=zh_CN.UTF-8
 
 EXPOSE 5901 8118 1080
 

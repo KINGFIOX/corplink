@@ -28,7 +28,7 @@ docker exec corplink supervisorctl status   # 各进程状态
   挂载 /home/corplink,uid 1000 与旧 kasm 镜像一致),重建容器不丢,但重建后
   飞连一般需在桌面里手动重连一次。
 - 回滚:当前 ubuntu:noble 版镜像 ID `f189e8376844`(更早的 kasm 版为
-  `2067eb46c3ba`),`docker tag <ID> sleepymole/corplink:latest && docker
+  `2067eb46c3ba`),`docker tag <ID> kingfiox/corplink:latest && docker
   compose up -d` 即可切回。
 
 ## 核心设计:TEST-NET 网段绕过飞连的私网阻断
@@ -73,6 +73,7 @@ Mac 访问:`ssh -N -L 5901:127.0.0.1:5901 -L 8888:192.168.122.1:8118 -L 1088:192
    不影响宿主机网络。
 6. 镜像本地构建(基础镜像 debian:trixie 经 docker.1panel.live 拉取后 retag,
    或 `--build-arg BASE_IMAGE=...` 直指镜像源;serjs/go-socks5-proxy 同理)。
+   Debian apt 源在安装层开头整体换成清华 TUNA 镜像(deb.debian.org 国内太慢)。
 
 ## 排障
 
